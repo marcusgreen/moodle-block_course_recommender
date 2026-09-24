@@ -1,6 +1,6 @@
 ### Course Recommendation
 
-Any reference to AI/LLM systems in this document covers external "bring your own inference" access. It is possible to use subscription cloud-based inference or in-house self-hosting. Nothing that would personally identify a student is sent to an external LLM for any setup permutation.
+Any reference to AI/LLM systems in this document covers external "bring your own inference" access. It is possible to use subscription cloud-based inference or in-house self-hosting. No names, emails or profile data are sent to an external LLM in any setup. When AI blurbs use Moodle’s AI subsystem, the provider may receive a hashed pseudonymous user ID.
 
 The Course recommendation system uses two plugins, the Course recommender block and the AutoTag tool.
 
