@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Course Recommendation</title>
+<style>
+body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #1f2937; background: #fff; }
+h2, h3 { color: #111827; margin-top: 2rem; }
+img { max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 0.5rem; margin: 0.5rem 0; }
+</style>
+</head>
+<body>
+<h3>Course Recommendation</h3>
+<p>Any reference to AI/LLM systems in this document covers external "bring your own inference" access. It is possible to use subscription cloud-based inference or in-house self-hosting. Nothing that would personally identify a student is sent to an external LLM for any setup permutation.</p>
+<p>The Course recommendation system uses two plugins, the Course recommender block and the AutoTag tool.</p>
+<h3>The Course recommender block</h3>
+<p>A user with the required role can add this to an individual course, to every course, to a user's profile or to their /my page. It shows a set of topic labels, such as "Leadership", "Excel" or "First Aid". A learner clicks the topics they're interested in, and the block lists courses that match them. It helps people find relevant courses without searching the whole catalogue.</p>
+<p>The topics come from the <strong>tags</strong> that course administrators already add to courses. The plugin doesn't need a separate list of topics. If a course is tagged "Excel", "Excel" becomes a topic in the block.</p>
+<p><img alt="Course recommender block on the /my page" src="images/my_placement.png" /></p>
+<h2>Why different people see different topics</h2>
+<p>Everyone starts from the same list: every tag used on at least one course (up to a configurable maximum tag count). The list is then personalised for each user.</p>
+<ol>
+<li>
+<p><strong>Topics that lead nowhere new are removed.</strong> Suppose every course tagged "Excel" is one the learner is already enrolled in or has finished. Showing "Excel" would only offer courses they already have, so it's hidden for them.</p>
+</li>
+<li>
+<p><strong>Topics linked to their current learning come first.</strong> Suppose a learner is taking a course tagged "Leadership", and other Leadership courses exist that they haven't taken. "Leadership" moves to the front of their list and is highlighted, because it's a likely next step.</p>
+</li>
+<li>
+<p><strong>Their earlier choices are remembered.</strong> If this feature is turned on, the topics a learner picked last time are already selected when they come back.</p>
+</li>
+<li>
+<p><strong>The list can be kept short.</strong> An administrator can limit how many topics are shown at once. The rest are still available through a search box.</p>
+</li>
+</ol>
+<p>Guests, and learners with no courses yet, see the full list without these personal adjustments.</p>
+<h3>The AutoTag tool</h3>
+<p>Moodle has a mature tagging system which is used by the Course recommender block.
+The AutoTag tool uses an external AI/LLM to automate applying tags to Moodle courses. It would be possible to use the block with manually applied course tags, but this tool automates the process with an additional human approval step. The tags are created by scanning</p>
+<ol>
+<li>Course fullname</li>
+<li>Course summary</li>
+<li>Existing module tags</li>
+</ol>
+<h3>Tag Approval</h3>
+<p><img alt="AutoTag dashboard listing suggested tags pending review" src="images/dashboard.jpg" /></p>
+<p>Because this plugin does not need “real time” performance it can be configured to use a low resource local LLM. AutoTag is configurable to either allocate the tags automatically or to require approval by the site admin. It offers a settings panel to control this and various other details of the process. Alternatively Catalyst could offer access to the inference to satisfy any requirements around data sovereignty etc.</p>
+<h3>Behind the scenes</h3>
+<p><img alt="How the AutoTag tool and the Course recommender block work together" src="images/plugin-relationship.png" /></p>
+</body>
+</html>
