@@ -5,7 +5,9 @@
  * @copyright  2025 Sadik Mert
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['jquery', 'core/ajax', 'core/notification', 'core/str'], function($, Ajax, Notification, Str) {
+define(
+    ['jquery', 'core/ajax', 'core/notification', 'core/str', 'core/modal'],
+    function($, Ajax, Notification, Str, Modal) {
 
     /**
      * Initialize the module.
@@ -13,10 +15,15 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'], function($, Aja
     function init() {
         var form = $('#courserecommender-form');
         var resultsContainer = $('.courserecommender-results');
+        var expandButton = $('.courserecommender-expand');
 
         if (!form.length || !resultsContainer.length) {
             return;
         }
+
+        expandButton.on('click', function() {
+            showExpandedResults(form);
+        });
 
         // Tag-Limitierung.
         var tagsContainer = form.find('.courserecommender-tags-container');
@@ -102,6 +109,34 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'], function($, Aja
     }
 
     /**
+     * Read the currently selected interest tags from the form.
+     *
+     * @param {jQuery} form The form element
+     * @return {Array} Selected tag names
+     */
+    function getSelectedInterests(form) {
+        var interests = form.find('#courserecommender-selected-tags').val();
+        return interests ? interests.split(',') : [];
+    }
+
+    /**
+     * Fetch rendered course results HTML for the given interests.
+     *
+     * @param {Array} interests Selected tag names
+     * @return {Promise}
+     */
+    function fetchResultsHtml(interests) {
+        var request = {
+            methodname: 'block_course_recommender_get_courses',
+            args: {
+                interests: interests,
+                sesskey: M.cfg.sesskey
+            }
+        };
+        return Ajax.call([request])[0];
+    }
+
+    /**
      * Update results using AJAX.
      *
      * @param {jQuery} form The form element
@@ -111,21 +146,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'], function($, Aja
         // Show loading indicator
         resultsContainer.html('<div class="text-center"><span class="spinner-border"></span></div>');
 
-        // Get selected interests from hidden input
-        var interests = form.find('#courserecommender-selected-tags').val();
-        interests = interests ? interests.split(',') : [];
-
-        // Prepare request
-        var request = {
-            methodname: 'block_course_recommender_get_courses',
-            args: {
-                interests: interests,
-                sesskey: M.cfg.sesskey
-            }
-        };
-
-        // Make AJAX call
-        Ajax.call([request])[0]
+        fetchResultsHtml(getSelectedInterests(form))
             .done(function(response) {
                 resultsContainer.fadeOut(200, function() {
                     $(this).html(response.html).fadeIn(200);
@@ -135,6 +156,38 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'], function($, Aja
                 Notification.exception(error);
                 handleAjaxError(resultsContainer);
             });
+    }
+
+    /**
+     * Open the current results in a large modal for a wider view.
+     *
+     * @param {jQuery} form The form element
+     */
+    function showExpandedResults(form) {
+        var interests = getSelectedInterests(form);
+
+        Str.get_string('expandresults', 'block_course_recommender')
+            .then(function(title) {
+                return Modal.create({
+                    title: title,
+                    body: '<div class="text-center"><span class="spinner-border"></span></div>',
+                    large: true,
+                    show: true,
+                    removeOnClose: true
+                });
+            })
+            .then(function(modal) {
+                modal.getRoot().addClass('courserecommender-modal');
+                fetchResultsHtml(interests)
+                    .done(function(response) {
+                        modal.setBody(response.html);
+                    })
+                    .fail(function(error) {
+                        Notification.exception(error);
+                    });
+                return modal;
+            })
+            .catch(Notification.exception);
     }
 
     /**

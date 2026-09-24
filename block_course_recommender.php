@@ -57,7 +57,7 @@ class block_course_recommender extends block_base {
      * @return stdClass The block content object.
      */
     public function get_content() {
-        global $OUTPUT;
+        global $OUTPUT, $USER;
 
         if ($this->content !== null) {
             return $this->content;
@@ -77,15 +77,41 @@ class block_course_recommender extends block_base {
             return $this->content;
         }
 
+        $related = [];
+        $knowncourseids = [];
+        if (isloggedin() && !isguestuser()) {
+            if (get_config('block_course_recommender', 'enrolmentfilter')) {
+                $knowncourseids = array_merge($knowncourseids, array_keys(enrol_get_users_courses($USER->id, true)));
+            }
+            if (\block_course_recommender\completion_lookup::is_enabled()) {
+                $knowncourseids = array_merge(
+                    $knowncourseids,
+                    \block_course_recommender\completion_lookup::get_completed_course_ids($USER->id)
+                );
+            }
+        }
+        if (!empty($knowncourseids)) {
+            $knowncourseids = array_values(array_unique($knowncourseids));
+            $knowntagnames = $this->get_enrolled_course_tagnames($knowncourseids);
+            [$interests, $related] = $this->filter_and_boost_tags($interests, $knowntagnames, $knowncourseids);
+        }
+
         $selected = [];
         if (!empty($_POST)) {
             $selected = optional_param_array('interests', [], PARAM_RAW);
+        } else if (\block_course_recommender\interest_store::is_enabled() && !isguestuser()) {
+            $selected = \block_course_recommender\interest_store::get_tagnames($USER->id);
         }
 
-        $tagsdata = $this->prepare_tagsdata($interests, $selected);
-        $data = $this->prepare_template_data($tagsdata, $interests);
+        $tagsdata = $this->prepare_tagsdata($interests, $selected, $related);
+        $data = $this->prepare_template_data($tagsdata, $interests, $selected);
 
         $this->content->text .= $OUTPUT->render_from_template('block_course_recommender/tagform', $data);
+        $this->content->text .= html_writer::tag('button', get_string('expandresults', 'block_course_recommender'), [
+            'type' => 'button',
+            'class' => 'btn btn-link courserecommender-expand',
+            'data-action' => 'expand',
+        ]);
         $this->content->text .= html_writer::start_div('courserecommender-results') . html_writer::end_div();
         return $this->content;
     }
@@ -137,18 +163,87 @@ class block_course_recommender extends block_base {
     }
 
     /**
+     * Gets the tag rawnames used on the given set of courses.
+     *
+     * @param array $courseids
+     * @return array Tag rawnames.
+     */
+    protected function get_enrolled_course_tagnames($courseids) {
+        if (empty($courseids)) {
+            return [];
+        }
+
+        $tagnames = [];
+        $itemtags = \core_tag_tag::get_items_tags('core', 'course', $courseids);
+        foreach ($itemtags as $coursetags) {
+            foreach ($coursetags as $tag) {
+                $tagnames[$tag->rawname] = true;
+            }
+        }
+        return array_keys($tagnames);
+    }
+
+    /**
+     * Filters out tags that would only lead to courses the user is already enrolled in,
+     * and moves tags shared with the user's enrolled courses to the front of the list.
+     *
+     * @param array $interests All available tag rawnames, in their configured sort order.
+     * @param array $enrolledtagnames Tag rawnames used on the user's enrolled courses.
+     * @param array $enrolledcourseids Course ids the user is actively enrolled in.
+     * @return array [filtered interests, related tag rawnames that were boosted]
+     */
+    protected function filter_and_boost_tags($interests, $enrolledtagnames, $enrolledcourseids) {
+        if (empty($enrolledtagnames)) {
+            return [$interests, []];
+        }
+
+        global $DB;
+        $candidates = array_values(array_intersect($interests, $enrolledtagnames));
+        if (empty($candidates)) {
+            return [$interests, []];
+        }
+
+        [$tagsql, $tagparams] = $DB->get_in_or_equal($candidates, SQL_PARAMS_NAMED, 'tag');
+        [$coursesql, $courseparams] = $DB->get_in_or_equal($enrolledcourseids, SQL_PARAMS_NAMED, 'course', false);
+
+        $sql = "
+            SELECT DISTINCT t.rawname
+            FROM {tag} t
+            JOIN {tag_instance} ti ON ti.tagid = t.id
+            JOIN {course} c ON c.id = ti.itemid AND c.visible = 1
+            WHERE ti.itemtype = 'course' AND ti.component = 'core'
+                AND t.rawname $tagsql
+                AND c.id $coursesql
+        ";
+        $stillvisible = $DB->get_fieldset_sql($sql, $tagparams + $courseparams);
+
+        $excluded = array_diff($candidates, $stillvisible);
+        $related = array_values(array_diff($candidates, $excluded));
+
+        $remaining = array_values(array_diff($interests, $excluded));
+        $ordered = array_merge(
+            array_values(array_intersect($remaining, $related)),
+            array_values(array_diff($remaining, $related))
+        );
+
+        return [$ordered, $related];
+    }
+
+    /**
      * Prepares tag data for the Mustache template.
      *
      * @param array $interests
      * @param array $selected
+     * @param array $related Tag rawnames to flag as related to the user's enrolled courses.
      * @return array
      */
-    protected function prepare_tagsdata($interests, $selected) {
+    protected function prepare_tagsdata($interests, $selected, $related = []) {
         $tagsdata = [];
         foreach ($interests as $tagname) {
             $tagsdata[] = [
                 'name' => $tagname,
                 'checked' => in_array($tagname, $selected),
+                'related' => in_array($tagname, $related),
                 'id' => 'interest-' . clean_param($tagname, PARAM_ALPHANUMEXT),
             ];
         }
@@ -160,9 +255,11 @@ class block_course_recommender extends block_base {
      *
      * @param array $tagsdata
      * @param array $interests
+     * @param array $selected Pre-selected interest tag names (e.g. from persisted storage).
      * @return array
      */
-    protected function prepare_template_data($tagsdata, $interests) {
+    protected function prepare_template_data($tagsdata, $interests, $selected = []) {
+        global $OUTPUT;
         $tagcolor = get_config('block_course_recommender', 'tagcolor');
         if (empty($tagcolor)) {
             $tagcolor = '#0f6fc5';
@@ -170,10 +267,12 @@ class block_course_recommender extends block_base {
         $maxtags = (int)get_config('block_course_recommender', 'maxtags');
         return [
             'interestlabel' => get_string('interest_label', 'block_course_recommender'),
+            'interesthelpicon' => $OUTPUT->help_icon('interest_label', 'block_course_recommender'),
             'tags' => $tagsdata,
             'all_tags_json' => json_encode($interests),
             'tagcolor' => $tagcolor,
             'maxtags' => $maxtags,
+            'selectedinterestscsv' => implode(',', $selected),
         ];
     }
 

@@ -73,7 +73,7 @@ class external extends external_api {
      * @return array
      */
     public static function get_courses($interests, $sesskey) {
-        global $PAGE, $OUTPUT;
+        global $PAGE, $OUTPUT, $USER;
 
         // Context and parameters validation.
         $context = context_system::instance();
@@ -93,8 +93,27 @@ class external extends external_api {
             throw new moodle_exception('invalidsesskey', 'error');
         }
 
+        $completionenabled = completion_lookup::is_enabled();
+        $excludedcourseids = $completionenabled
+            ? completion_lookup::get_completed_course_ids($USER->id)
+            : [];
+
+        // Course and competency texts are only used by the similarity re-ranker.
+        $rerankenabled = !empty(get_config('block_course_recommender', 'embedding_rerank'));
+        $completedcoursetexts = ($completionenabled && $rerankenabled)
+            ? completion_lookup::get_completed_course_texts($USER->id)
+            : [];
+
+        $competencyenabled = competency_lookup::is_enabled() && $rerankenabled;
+        $competencytexts = $competencyenabled
+            ? competency_lookup::get_competency_texts($USER->id)
+            : [];
+
         if (empty($params['interests'])) {
-            $courses = self::find_popular_courses();
+            if (interest_store::is_enabled()) {
+                interest_store::delete_for_user($USER->id);
+            }
+            $courses = self::find_popular_courses($excludedcourseids);
             $selectedinterests = [];
             $heading = get_string('popularcourses', 'block_course_recommender');
         } else {
@@ -106,12 +125,18 @@ class external extends external_api {
                 ];
             }
 
-            $courses = self::find_matching_courses($tagids);
+            if (interest_store::is_enabled()) {
+                interest_store::save($USER->id, $tagids);
+            }
+
+            $courses = self::find_matching_courses($tagids, $excludedcourseids);
             $selectedinterests = array_map('mb_strtolower', array_map('trim', $params['interests']));
             $heading = get_string('matchingcourses', 'block_course_recommender');
         }
 
         $courselist = self::prepare_course_list_data($courses, $selectedinterests);
+        $courselist = reranker::rerank($courselist, $selectedinterests, $completedcoursetexts, $competencytexts);
+        $courselist = blurb_generator::annotate($courselist, $selectedinterests);
 
         $data = [
             'matchingcourses' => $heading,
@@ -147,9 +172,10 @@ class external extends external_api {
     /**
      * Find matching courses for the tag IDs.
      * @param array $tagids
+     * @param array $excludedcourseids Course ids to leave out of the results (e.g. already completed).
      * @return array
      */
-    protected static function find_matching_courses($tagids) {
+    protected static function find_matching_courses($tagids, $excludedcourseids = []) {
         global $DB;
         $in1 = $DB->get_in_or_equal($tagids, SQL_PARAMS_NAMED, 'tag');
         $tagidssql = $in1[0];
@@ -158,6 +184,14 @@ class external extends external_api {
         $tagidssql2 = $in2[0];
         $tagidparams2 = $in2[1];
         $groupconcat = $DB->sql_group_concat('coursetags.rawname');
+
+        $excludesql = '';
+        $excludeparams = [];
+        if (!empty($excludedcourseids)) {
+            [$excludesql, $excludeparams] = $DB->get_in_or_equal($excludedcourseids, SQL_PARAMS_NAMED, 'excl', false);
+            $excludesql = "AND c.id $excludesql";
+        }
+
         $sql = "
             WITH matching_courses AS (
                 SELECT DISTINCT c.id
@@ -167,6 +201,7 @@ class external extends external_api {
                 AND ti.itemtype = 'course'
                 AND ti.component = 'core'
                 AND c.visible = 1
+                $excludesql
             ),
             coursetags AS (
                 SELECT DISTINCT ti.itemid AS courseid, t.id AS tagid, t.rawname
@@ -195,17 +230,25 @@ class external extends external_api {
         $sqlparams = array_merge($tagidparams, [
             'enrolenabled' => ENROL_INSTANCE_ENABLED,
             'userenrolactive' => ENROL_USER_ACTIVE,
-        ], $tagidparams2);
+        ], $tagidparams2, $excludeparams);
         return $DB->get_records_sql($sql, $sqlparams);
     }
 
     /**
      * Find popular courses by active enrolments.
      *
+     * @param array $excludedcourseids Course ids to leave out of the results (e.g. already completed).
      * @return array
      */
-    protected static function find_popular_courses() {
+    protected static function find_popular_courses($excludedcourseids = []) {
         global $DB;
+
+        $excludesql = '';
+        $excludeparams = [];
+        if (!empty($excludedcourseids)) {
+            [$excludesql, $excludeparams] = $DB->get_in_or_equal($excludedcourseids, SQL_PARAMS_NAMED, 'excl', false);
+            $excludesql = "AND c.id $excludesql";
+        }
 
         $groupconcat = $DB->sql_group_concat('coursetags.rawname');
         $sql = "
@@ -226,15 +269,17 @@ class external extends external_api {
                    ) coursetags ON coursetags.courseid = c.id
              WHERE c.visible = 1
                    AND c.id <> :siteid
+                   $excludesql
           GROUP BY c.id, cc.name
           ORDER BY enrolments DESC, c.timecreated DESC
         ";
 
-        return $DB->get_records_sql($sql, [
+        $sqlparams = array_merge([
             'enrolenabled' => ENROL_INSTANCE_ENABLED,
             'userenrolactive' => ENROL_USER_ACTIVE,
             'siteid' => SITEID,
-        ], 0, 20);
+        ], $excludeparams);
+        return $DB->get_records_sql($sql, $sqlparams, 0, 20);
     }
 
     /**
@@ -276,6 +321,7 @@ class external extends external_api {
                 }
             }
             $list[] = [
+                'id' => (int) $course->id,
                 'url' => $url->out(false),
                 'title' => $title,
                 'summary' => $summary,

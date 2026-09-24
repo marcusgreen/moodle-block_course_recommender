@@ -22,11 +22,14 @@
 
     Context variables required for this template:
         * interestlabel - string (localized label)
+        * interesthelpicon - string (rendered help icon HTML, from $OUTPUT->help_icon())
         * tags - array of tag objects
             * name - string (tag name)
             * checked - bool
+            * related - bool (true if related to the user's enrolled courses)
             * id - string (unique id)
         * all_tags_json - JSON array of all tag names (for JS autocomplete)
+        * selectedinterestscsv - string (comma-separated pre-selected tag names, may be empty)
     Example context (json):
     {
         "interestlabel": "Select your interests:",
@@ -38,7 +41,7 @@
     }
 }}
 <form method="post" action="#" id="courserecommender-form">
-    <label class="courserecommender-tags-container-label">{{interestlabel}}</label>
+    <label class="courserecommender-tags-container-label">{{interestlabel}} {{{interesthelpicon}}}</label>
     <div class="courserecommender-search">
         <label class="sr-only" for="courserecommender-tag-search">{{#str}}searchtags, block_course_recommender{{/str}}</label>
         <div class="courserecommender-search-control">
@@ -55,20 +58,25 @@
             {{#str}}searchtagshelp, block_course_recommender{{/str}}
         </small>
     </div>
-    <div
-        class="courserecommender-tags-container"
-        style="--cr-badge-color: {{#tagcolor}}{{tagcolor}}{{/tagcolor}}{{^tagcolor}}#0f6fc5{{/tagcolor}};"
-        data-maxtags="{{maxtags}}"
-    >
-        {{#tags}}
-        <span
-            class="courserecommender-badge{{#checked}} selected{{/checked}}"
-            data-tag="{{name}}"
-            id="{{id}}"
-        >{{name}}</span>
-        {{/tags}}
-        <input type="hidden" name="interests[]" id="courserecommender-selected-tags" value="">
-    </div>
+    <details class="courserecommender-tags-details" open>
+        <summary class="courserecommender-tags-summary">
+            {{#str}}alltags, block_course_recommender{{/str}}
+        </summary>
+        <div
+            class="courserecommender-tags-container"
+            style="--cr-badge-color: {{#tagcolor}}{{tagcolor}}{{/tagcolor}}{{^tagcolor}}#0f6fc5{{/tagcolor}};"
+            data-maxtags="{{maxtags}}"
+        >
+            {{#tags}}
+            <span
+                class="courserecommender-badge{{#checked}} selected{{/checked}}{{#related}} courserecommender-badge-related{{/related}}"
+                data-tag="{{name}}"
+                id="{{id}}"
+            >{{name}}</span>
+            {{/tags}}
+            <input type="hidden" name="interests[]" id="courserecommender-selected-tags" value="{{selectedinterestscsv}}">
+        </div>
+    </details>
 </form>
 <script>
     window.courserecommenderAllTags = {{{ all_tags_json }}};

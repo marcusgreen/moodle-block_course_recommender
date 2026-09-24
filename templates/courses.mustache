@@ -31,6 +31,8 @@
             * title - string (course name)
             * image - string (course image url)
             * tags - array of tag names
+    Optional per-course context variables:
+        * blurb - string (AI-generated "why recommended" sentence)
     Optional context variables for this template:
         * courses (if empty, nocourses is shown)
     Example context (json):
@@ -71,6 +73,9 @@
                 {{#summary}}
                 <p class="courserecommender-summary">{{summary}}</p>
                 {{/summary}}
+                {{#blurb}}
+                <p class="courserecommender-blurb"><em>{{blurb}}</em></p>
+                {{/blurb}}
                 <div class="courserecommender-meta">
                     {{#enrolmentlabel}}
                     <span>{{enrolmentlabel}}</span>

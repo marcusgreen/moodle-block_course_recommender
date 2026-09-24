@@ -51,4 +51,107 @@ if ($ADMIN->fulltree) {
             'za' => get_string('tagsort_za', 'block_course_recommender'),
         ]
     ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'block_course_recommender/aiblurb',
+        get_string('settings:aiblurb', 'block_course_recommender'),
+        get_string('settings:aiblurb_desc', 'block_course_recommender'),
+        0
+    ));
+
+    $settings->add(new admin_setting_configselect(
+        'block_course_recommender/aiblurb_backend',
+        get_string('settings:aiblurb_backend', 'block_course_recommender'),
+        get_string('settings:aiblurb_backend_desc', 'block_course_recommender'),
+        'core_ai_subsystem',
+        [
+            'core_ai_subsystem' => get_string('settings:aiblurb_backend_core', 'block_course_recommender'),
+            'local_ai_manager'  => get_string('settings:aiblurb_backend_local', 'block_course_recommender'),
+            'tool_aimanager'    => get_string('settings:aiblurb_backend_tool', 'block_course_recommender'),
+        ]
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'block_course_recommender/persistinterests',
+        get_string('settings:persistinterests', 'block_course_recommender'),
+        get_string('settings:persistinterests_desc', 'block_course_recommender'),
+        0
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'block_course_recommender/enrolmentfilter',
+        get_string('settings:enrolmentfilter', 'block_course_recommender'),
+        get_string('settings:enrolmentfilter_desc', 'block_course_recommender'),
+        0
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'block_course_recommender/completionfilter',
+        get_string('settings:completionfilter', 'block_course_recommender'),
+        get_string('settings:completionfilter_desc', 'block_course_recommender'),
+        0
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'block_course_recommender/competencyfilter',
+        get_string('settings:competencyfilter', 'block_course_recommender'),
+        get_string('settings:competencyfilter_desc', 'block_course_recommender'),
+        0
+    ));
+
+    $settings->add(new admin_setting_configtext(
+        'block_course_recommender/aiblurb_purpose',
+        get_string('settings:aiblurb_purpose', 'block_course_recommender'),
+        get_string('settings:aiblurb_purpose_desc', 'block_course_recommender'),
+        'feedback',
+        PARAM_ALPHANUMEXT
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'block_course_recommender/embedding_rerank',
+        get_string('settings:embedding_rerank', 'block_course_recommender'),
+        get_string('settings:embedding_rerank_desc', 'block_course_recommender'),
+        0
+    ));
+
+    $settings->add(new admin_setting_heading(
+        'block_course_recommender/embeddingheading',
+        get_string('settings:embeddingheading', 'block_course_recommender'),
+        get_string('settings:embeddingheading_desc', 'block_course_recommender')
+    ));
+
+    $settings->add(new admin_setting_configselect(
+        'block_course_recommender/embedding_backend',
+        get_string('settings:embedding_backend', 'block_course_recommender'),
+        get_string('settings:embedding_backend_desc', 'block_course_recommender'),
+        'openai',
+        [
+            'openai'            => get_string('settings:embedding_backend_openai', 'block_course_recommender'),
+            'openai_compatible' => get_string('settings:embedding_backend_compatible', 'block_course_recommender'),
+            'ollama'            => get_string('settings:embedding_backend_ollama', 'block_course_recommender'),
+        ]
+    ));
+
+    $settings->add(new admin_setting_configtext(
+        'block_course_recommender/embedding_baseurl',
+        get_string('settings:embedding_baseurl', 'block_course_recommender'),
+        get_string('settings:embedding_baseurl_desc', 'block_course_recommender'),
+        '',
+        PARAM_URL
+    ));
+
+    $settings->add(new admin_setting_configpasswordunmask(
+        'block_course_recommender/embedding_openai_apikey',
+        get_string('settings:embedding_openai_apikey', 'block_course_recommender'),
+        get_string('settings:embedding_openai_apikey_desc', 'block_course_recommender'),
+        ''
+    ));
+
+    $settings->add(new admin_setting_configtext(
+        'block_course_recommender/embedding_model',
+        get_string('settings:embedding_model', 'block_course_recommender'),
+        get_string('settings:embedding_model_desc', 'block_course_recommender'),
+        'text-embedding-3-small',
+        PARAM_RAW_TRIMMED
+    ));
 }
